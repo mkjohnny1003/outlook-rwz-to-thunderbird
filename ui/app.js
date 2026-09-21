@@ -211,26 +211,45 @@
   // Update preview table & folder status
   function updateRulesTable() {
     if (!parsedRwz || !parsedRwz.rules || parsedRwz.rules.length === 0) {
-      rulesTableBody.innerHTML = '<tr><td colspan="5" class="empty-state">尚未載入 .rwz 規則檔</td></tr>';
-      folderStatusSummary.innerHTML = '<span class="status-indicator">尚無資料</span>';
+      rulesTableBody.textContent = '';
+      const emptyTr = document.createElement('tr');
+      const emptyTd = document.createElement('td');
+      emptyTd.colSpan = 5;
+      emptyTd.className = 'empty-state';
+      emptyTd.textContent = '尚未載入 .rwz 規則檔';
+      emptyTr.appendChild(emptyTd);
+      rulesTableBody.appendChild(emptyTr);
+
+      folderStatusSummary.textContent = '';
+      const emptyStatus = document.createElement('span');
+      emptyStatus.className = 'status-indicator';
+      emptyStatus.textContent = '尚無資料';
+      folderStatusSummary.appendChild(emptyStatus);
       return;
     }
 
     const { existing, missing, all } = FolderManager.checkRuleFolders(parsedRwz.rules, selectedAccount);
 
+    folderStatusSummary.textContent = '';
     if (all.length === 0) {
-      folderStatusSummary.innerHTML = '<span class="badge badge-info">規則中無指定移動/複製資料夾</span>';
+      const badge = document.createElement('span');
+      badge.className = 'badge badge-info';
+      badge.textContent = '規則中無指定移動/複製資料夾';
+      folderStatusSummary.appendChild(badge);
     } else {
       const autoCreate = optAutoCreateFolders.checked;
-      folderStatusSummary.innerHTML = `
-        <span class="badge badge-success">已存在: ${existing.length}</span>
-        <span class="badge ${autoCreate ? 'badge-folder-create' : 'badge-warning'}">
-          ${autoCreate ? '⚡ 將自動建立' : '缺少'}: ${missing.length}
-        </span>
-      `;
+      const bExist = document.createElement('span');
+      bExist.className = 'badge badge-success';
+      bExist.textContent = `已存在: ${existing.length}`;
+      folderStatusSummary.appendChild(bExist);
+
+      const bMiss = document.createElement('span');
+      bMiss.className = `badge ${autoCreate ? 'badge-folder-create' : 'badge-warning'}`;
+      bMiss.textContent = `${autoCreate ? '⚡ 將自動建立' : '缺少'}: ${missing.length}`;
+      folderStatusSummary.appendChild(bMiss);
     }
 
-    rulesTableBody.innerHTML = '';
+    rulesTableBody.textContent = '';
 
     parsedRwz.rules.forEach((rule, idx) => {
       const tr = document.createElement('tr');
@@ -249,7 +268,9 @@
 
       // Rule Name
       const tdName = document.createElement('td');
-      tdName.innerHTML = `<strong>${escapeHtml(rule.name)}</strong>`;
+      const strongName = document.createElement('strong');
+      strongName.textContent = rule.name || '';
+      tdName.appendChild(strongName);
       tr.appendChild(tdName);
 
       // Conditions
@@ -265,7 +286,10 @@
         });
         tdCond.appendChild(tagList);
       } else {
-        tdCond.innerHTML = '<span class="tag">套用至所有郵件</span>';
+        const tag = document.createElement('span');
+        tag.className = 'tag';
+        tag.textContent = '套用至所有郵件';
+        tdCond.appendChild(tag);
       }
       tr.appendChild(tdCond);
 
@@ -282,7 +306,10 @@
         });
         tdAct.appendChild(tagList);
       } else {
-        tdAct.innerHTML = '<span class="tag">無特定動作</span>';
+        const tag = document.createElement('span');
+        tag.className = 'tag';
+        tag.textContent = '無特定動作';
+        tdAct.appendChild(tag);
       }
       tr.appendChild(tdAct);
 
@@ -308,7 +335,11 @@
         });
         tdFolder.appendChild(tagList);
       } else {
-        tdFolder.innerHTML = '<span style="color: var(--text-muted); font-size: 12px;">-</span>';
+        const dash = document.createElement('span');
+        dash.style.color = 'var(--text-muted)';
+        dash.style.fontSize = '12px';
+        dash.textContent = '-';
+        tdFolder.appendChild(dash);
       }
       tr.appendChild(tdFolder);
 
