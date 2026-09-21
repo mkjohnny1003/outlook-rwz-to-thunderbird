@@ -7,6 +7,18 @@
 (function () {
   'use strict';
 
+  // Helper to safely resolve library dependencies from global/window scope
+  function resolveDeps() {
+    return {
+      RwzParser: (typeof globalThis !== 'undefined' && globalThis.RwzParser) ||
+                 (typeof window !== 'undefined' && window.RwzParser) || null,
+      FolderManager: (typeof globalThis !== 'undefined' && globalThis.FolderManager) ||
+                     (typeof window !== 'undefined' && window.FolderManager) || null,
+      FilterGenerator: (typeof globalThis !== 'undefined' && globalThis.FilterGenerator) ||
+                       (typeof window !== 'undefined' && window.FilterGenerator) || null
+    };
+  }
+
   // State
   let accounts = [];
   let selectedAccount = null;
@@ -52,6 +64,11 @@
 
   // Initialize
   async function init() {
+    const { FolderManager } = resolveDeps();
+    if (!FolderManager) {
+      log('找不到 FolderManager 模組，請重新整理頁面。', 'error');
+      return;
+    }
     folderManager = new FolderManager(typeof messenger !== 'undefined' ? messenger : null);
 
     // Check Experiment API availability
@@ -182,6 +199,10 @@
     reader.onload = function (e) {
       try {
         const buffer = e.target.result;
+        const { RwzParser } = resolveDeps();
+        if (!RwzParser) {
+          throw new Error('找不到 RwzParser 核心模組，請重新整理頁面。');
+        }
         parsedRwz = RwzParser.parse(buffer);
 
         fileVersionEl.textContent = parsedRwz.version;
@@ -228,7 +249,10 @@
       return;
     }
 
-    const { existing, missing, all } = FolderManager.checkRuleFolders(parsedRwz.rules, selectedAccount);
+    const { FolderManager } = resolveDeps();
+    const { existing, missing, all } = FolderManager
+      ? FolderManager.checkRuleFolders(parsedRwz.rules, selectedAccount)
+      : { existing: [], missing: [], all: [] };
 
     folderStatusSummary.textContent = '';
     if (all.length === 0) {
@@ -371,8 +395,9 @@
       log('資料夾準備程序完成！', 'success');
     } else {
       // Just resolve existing ones
+      const { FolderManager } = resolveDeps();
       for (const tf of allTargetFolders) {
-        const existing = FolderManager.findFolderInAccount(selectedAccount, tf);
+        const existing = FolderManager ? FolderManager.findFolderInAccount(selectedAccount, tf) : null;
         folderMap.set(tf, {
           folder: existing,
           uri: folderManager.constructFolderUri(existing, selectedAccount),
@@ -397,6 +422,10 @@
 
       // 2. Direct injection via Experiment API
       if (typeof messenger !== 'undefined' && messenger.rwzFilters && messenger.rwzFilters.importRules) {
+        const { FilterGenerator } = resolveDeps();
+        if (!FilterGenerator) {
+          throw new Error('找不到 FilterGenerator 模組，請重新整理頁面。');
+        }
         const payload = FilterGenerator.toExperimentPayload(parsedRwz.rules, resolvedFolders);
         log(`正在透過 Thunderbird XPCOM 核心服務寫入 ${payload.length} 條規則...`);
         const result = await messenger.rwzFilters.importRules(selectedAccount.id, payload);
@@ -421,6 +450,10 @@
     if (!parsedRwz || !selectedAccount) return;
 
     try {
+      const { FilterGenerator } = resolveDeps();
+      if (!FilterGenerator) {
+        throw new Error('找不到 FilterGenerator 模組，請重新整理頁面。');
+      }
       const resolvedFolders = await prepareFolders();
       const content = FilterGenerator.generateMsgFilterRulesDat(parsedRwz.rules, resolvedFolders, {
         logging: true
