@@ -9,29 +9,36 @@ const api = typeof messenger !== 'undefined' ? messenger : browser;
 // Listen for action button click in toolbar
 const actionApi = api.browserAction || api.action;
 
-if (actionApi && actionApi.onClicked) {
-  actionApi.onClicked.addListener(async () => {
-    const url = api.runtime.getURL('ui/index.html');
-
-    // Check if the tab is already open
-    const tabs = await api.tabs.query({ url });
-    if (tabs && tabs.length > 0) {
-      // Focus existing tab
-      await api.tabs.update(tabs[0].id, { active: true });
-      if (tabs[0].windowId) {
-        await api.windows.update(tabs[0].windowId, { focused: true });
+async function openAppTab() {
+  try {
+    const tabs = await api.tabs.query({});
+    const existing = tabs.find(t => t.url && t.url.includes('ui/index.html'));
+    if (existing) {
+      await api.tabs.update(existing.id, { active: true });
+      if (existing.windowId) {
+        await api.windows.update(existing.windowId, { focused: true });
       }
-    } else {
-      // Open new tab
-      await api.tabs.create({ url });
+      return;
     }
+  } catch (_) {}
+
+  try {
+    await api.tabs.create({ url: 'ui/index.html' });
+  } catch (_) {}
+}
+
+if (actionApi && actionApi.onClicked) {
+  actionApi.onClicked.addListener(() => {
+    openAppTab();
   });
 }
 
-// On install, log and optionally open the options / tool tab
+// On install, open the options / tool tab safely
 api.runtime.onInstalled.addListener((details) => {
   if (details.reason === 'install') {
-    const url = api.runtime.getURL('ui/index.html');
-    api.tabs.create({ url }).catch(() => {});
+    // Delay slightly to ensure UUID and contexts are ready
+    setTimeout(() => {
+      openAppTab();
+    }, 500);
   }
 });
