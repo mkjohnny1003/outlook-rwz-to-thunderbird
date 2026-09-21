@@ -4,7 +4,7 @@
 [![Thunderbird](https://img.shields.io/badge/Thunderbird-MailExtension-orange.svg)](https://www.thunderbird.net/)
 [![Release](https://img.shields.io/github/v/release/mkjohnny1003/outlook-rwz-to-thunderbird?color=green)](https://github.com/mkjohnny1003/outlook-rwz-to-thunderbird/releases)
 [![GitHub](https://img.shields.io/badge/GitHub-mkjohnny1003-181717?logo=github)](https://github.com/mkjohnny1003)
-[![Donate](https://img.shields.io/badge/Donate-PayPal-blue?logo=paypal)](https://www.paypal.me/mkjohnny)
+[![Donate](https://img.shields.io/badge/Donate-PayPal-blue?logo=paypal)](https://www.paypal.me/mkjohnny1003)
 
 [繁體中文 (Traditional Chinese)](#繁體中文說明) | [English (User Guide)](#english-user-guide)
 
