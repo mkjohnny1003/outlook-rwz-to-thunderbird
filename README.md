@@ -1,7 +1,7 @@
 # Outlook RWZ to Thunderbird Filter Add-on
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Thunderbird](https://img.shields.io/badge/Thunderbird-MailExtension-orange.svg)](https://www.thunderbird.net/)
+[![Thunderbird ATN](https://img.shields.io/badge/Thunderbird%20ATN-outlook--rwz--to--tb-blue?logo=thunderbird)](https://addons.thunderbird.net/zh-TW/thunderbird/addon/outlook-rwz-to-tb/)
 [![Release](https://img.shields.io/github/v/release/mkjohnny1003/outlook-rwz-to-thunderbird?color=green)](https://github.com/mkjohnny1003/outlook-rwz-to-thunderbird/releases)
 [![GitHub](https://img.shields.io/badge/GitHub-mkjohnny1003-181717?logo=github)](https://github.com/mkjohnny1003)
 [![Donate](https://img.shields.io/badge/Donate-PayPal-blue?logo=paypal)](https://www.paypal.me/mkjohnny1003)
@@ -37,15 +37,19 @@
 ---
 
 ### 第二步：安裝附加元件至 Thunderbird
-#### 方式 A：使用封裝好的 `.xpi` 檔案（推薦）
-1. 至本專案的 [Releases 頁面](https://github.com/mkjohnny1003/outlook-rwz-to-thunderbird/releases/tag/v1.0.0) 下載最新版 **`outlook-rwz-to-thunderbird.xpi`**。
+#### 方式 A：從 Thunderbird 官方附加元件商店安裝（最簡單、推薦）
+👉 **[點此前往 Thunderbird 官方商店頁面安裝 (outlook-rwz-to-tb)](https://addons.thunderbird.net/zh-TW/thunderbird/addon/outlook-rwz-to-tb/)**
+- 或直接在 Thunderbird 的「附加元件管理員」中搜尋 **`Outlook RWZ`** 或 **`outlook-rwz-to-tb`**，點擊「新增至 Thunderbird」即可自動完成安裝與後續更新。
+
+#### 方式 B：使用 GitHub `.xpi` 檔案手動安裝
+1. 至本專案的 [Releases 頁面](https://github.com/mkjohnny1003/outlook-rwz-to-thunderbird/releases) 下載最新版 **`outlook-rwz-to-thunderbird.xpi`**。
 2. 開啟 Mozilla Thunderbird。
 3. 點擊右上角功能表 ➔ 選擇 **「附加元件與佈景主題」**（快捷鍵：`Ctrl+Shift+A`，Mac 為 `Cmd+Shift+A`）。
 4. 點擊右上角齒輪圖示 ⚙️ ➔ 選擇 **「從檔案安裝附加元件...」**。
 5. 選取下載的 `outlook-rwz-to-thunderbird.xpi` 檔案，在權限提示視窗中確認安裝。
 6. 安裝後，Thunderbird 工具列將出現轉換器圖示（或自動開啟主分頁）。
 
-#### 方式 B：開發者暫時性載入
+#### 方式 C：開發者暫時性載入
 1. 在 Thunderbird 網址列輸入 `about:debugging`。
 2. 點選左側「This Thunderbird」➔ 點擊「Load Temporary Add-on...」。
 3. 選取本專案目錄中的 `manifest.json` 即可完成載入。
@@ -136,15 +140,19 @@ An open-source **Mozilla Thunderbird** extension (MailExtension) designed to par
 ---
 
 ### Step 2: Install the Extension in Thunderbird
-#### Option A: Install from `.xpi` File (Recommended)
-1. Download the latest **`outlook-rwz-to-thunderbird.xpi`** from the [Releases Page](https://github.com/mkjohnny1003/outlook-rwz-to-thunderbird/releases/tag/v1.0.0).
+#### Option A: Install from Official Thunderbird Add-ons (Recommended)
+👉 **[Get it on Thunderbird Add-ons (ATN)](https://addons.thunderbird.net/zh-TW/thunderbird/addon/outlook-rwz-to-tb/)**
+- Or search for **`Outlook RWZ`** or **`outlook-rwz-to-tb`** inside Thunderbird's Add-ons Manager and click "Add to Thunderbird" for automatic installation and background updates.
+
+#### Option B: Install from GitHub `.xpi` Release
+1. Download the latest **`outlook-rwz-to-thunderbird.xpi`** from the [GitHub Releases Page](https://github.com/mkjohnny1003/outlook-rwz-to-thunderbird/releases).
 2. Open Mozilla Thunderbird.
 3. Open **Add-ons and Themes** (shortcut: `Ctrl+Shift+A` on Windows/Linux, `Cmd+Shift+A` on macOS).
 4. Click the gear icon ⚙️ at the top right ➔ select **"Install Add-on From File..."**.
 5. Select the downloaded `.xpi` file and confirm permissions when prompted.
 6. Once installed, a new icon will appear in the Thunderbird toolbar. Click it to open the converter tab.
 
-#### Option B: Load as Temporary Extension (Developers)
+#### Option C: Load as Temporary Extension (Developers)
 1. Navigate to `about:debugging` in Thunderbird.
 2. Select **This Thunderbird** on the left menu.
 3. Click **Load Temporary Add-on...**.
