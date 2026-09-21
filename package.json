@@ -1,6 +1,6 @@
 {
   "name": "outlook-rwz-to-thunderbird",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "description": "Mozilla Thunderbird 附加元件：將 Outlook .rwz 規則檔轉換為 Thunderbird 郵件篩選器，並自動建立不存在的資料夾。",
   "main": "background.js",
   "scripts": {
