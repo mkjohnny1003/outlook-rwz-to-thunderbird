@@ -448,28 +448,30 @@
           log(`記憶體快取重新載入方式: ${result.reloadStatus}`, 'info');
         }
 
-        // Build post-import message
+        // Build post-import message — always remind to fully quit and reopen
         let alertMsg = `✅ 成功匯入 ${result.totalImported} 條規則至「${selectedAccount.name}」！\n`;
         alertMsg += `\n檔案路徑: ${result.targetPath}\n`;
+        alertMsg += `\n════════════════════════════════\n`;
+        alertMsg += `⚠️ 重要：請務必「徹底關閉」Thunderbird 後再重新開啟！\n`;
+        alertMsg += `════════════════════════════════\n\n`;
+        alertMsg += `macOS：Thunderbird → 結束 Thunderbird（或 Cmd+Q）\n`;
+        alertMsg += `Windows：檔案 → 結束（或 Alt+F4 確認完全關閉）\n\n`;
+        alertMsg += `⛔ 僅關閉視窗不等於結束程式，Thunderbird 記憶體中的\n`;
+        alertMsg += `舊資料可能會覆蓋剛匯入的規則！\n\n`;
+        alertMsg += `重新開啟後至「工具 → 郵件篩選器」即可看到所有規則。`;
 
         if (result.needsRestart) {
-          alertMsg += `\n⚠️ 重要提示：\n`;
-          alertMsg += `Thunderbird 的記憶體快取可能尚未更新。\n`;
-          alertMsg += `請依照以下步驟確保規則生效：\n\n`;
-          alertMsg += `方法 1（推薦）：完全關閉並重新啟動 Thunderbird\n`;
-          alertMsg += `方法 2：至「工具」→「郵件篩選器」，關閉後再開啟\n\n`;
-          alertMsg += `若重啟後仍未看到規則，系統已同時備份下載 msgFilterRules.dat，\n`;
-          alertMsg += `請手動將該檔案放至上述路徑覆蓋即可。`;
-
-          log('⚠️ Thunderbird 記憶體快取可能需要重啟才能刷新。建議完全關閉並重新啟動 Thunderbird。', 'warn');
-          log(`📋 若需手動放入，請將 msgFilterRules.dat 放至: ${result.targetPath}`, 'info');
+          alertMsg += `\n\n💡 系統已同時備份下載 msgFilterRules.dat，\n`;
+          alertMsg += `若重啟後仍未看到規則，請將該檔案手動放至上述路徑覆蓋。`;
 
           // Auto-download as backup
           autoDownloadDatBackup(datContent);
-        } else {
-          alertMsg += `\n已自動重新載入記憶體快取，規則應已立即生效！`;
-          alertMsg += `\n請至「工具」→「郵件篩選器」確認。`;
-          log('已自動重新載入 Thunderbird 記憶體中的篩選器快取。', 'success');
+        }
+
+        log('⚠️ 請務必「徹底關閉」Thunderbird（Cmd+Q / Alt+F4）後再重新開啟，以確保規則生效！', 'warn');
+        log(`📋 重啟後至「工具 → 郵件篩選器」確認規則。`, 'info');
+        if (result.needsRestart) {
+          log(`📥 已同時備份下載 msgFilterRules.dat，若需手動放入: ${result.targetPath}`, 'info');
         }
 
         alert(alertMsg);
