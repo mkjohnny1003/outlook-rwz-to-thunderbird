@@ -425,15 +425,19 @@
       // 1. Ensure required folders exist
       const resolvedFolders = await prepareFolders();
 
-      // 2. Direct injection via Experiment API
+      // 2. Generate msgFilterRules.dat content
+      const { FilterGenerator } = resolveDeps();
+      if (!FilterGenerator) {
+        throw new Error('找不到 FilterGenerator 模組，請重新整理頁面。');
+      }
+      const datContent = FilterGenerator.generateMsgFilterRulesDat(parsedRwz.rules, resolvedFolders, {
+        logging: true
+      });
+
+      // 3. Direct injection via Experiment API
       if (typeof messenger !== 'undefined' && messenger.rwzFilters && messenger.rwzFilters.importRules) {
-        const { FilterGenerator } = resolveDeps();
-        if (!FilterGenerator) {
-          throw new Error('找不到 FilterGenerator 模組，請重新整理頁面。');
-        }
-        const payload = FilterGenerator.toExperimentPayload(parsedRwz.rules, resolvedFolders);
-        log(`正在透過 Thunderbird XPCOM 核心服務寫入 ${payload.length} 條規則...`);
-        const result = await messenger.rwzFilters.importRules(selectedAccount.id, payload);
+        log(`正在寫入 ${parsedRwz.rules.length} 條規則至 Thunderbird 篩選器...`);
+        const result = await messenger.rwzFilters.importRules(selectedAccount.id, datContent);
         log(`🎉 匯入成功！共建立並套用 ${result.totalImported} 條篩選器，已直接生效！`, 'success');
         alert(`成功匯入 ${result.totalImported} 條規則至「${selectedAccount.name}」！\n您可至 Thunderbird 的「工具」>「郵件篩選器」中檢視。`);
       } else {
@@ -442,8 +446,9 @@
         handleDownloadDat();
       }
     } catch (err) {
-      log(`匯入過程發生錯誤: ${err.message}`, 'error');
-      alert(`匯入失敗：\n${err.message}`);
+      log(`核心寫入發生例外: ${err.message}，自動切換為下載 msgFilterRules.dat 規則檔...`, 'warn');
+      handleDownloadDat();
+      alert(`核心直接寫入失敗（${err.message}）。\n\n別擔心！所有資料夾皆已自動建立完成，系統已自動為您下載 msgFilterRules.dat 規則檔！`);
     } finally {
       directImportBtn.disabled = false;
       updateRulesTable();

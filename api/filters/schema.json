@@ -15,9 +15,15 @@
             "description": "The target Thunderbird account ID"
           },
           {
-            "name": "rules",
-            "type": "any",
-            "description": "Array of structured rule definitions"
+            "name": "datContent",
+            "type": "string",
+            "description": "msgFilterRules.dat content string"
+          },
+          {
+            "name": "rulesJson",
+            "type": "string",
+            "optional": true,
+            "description": "Optional JSON string of rules"
           }
         ]
       },

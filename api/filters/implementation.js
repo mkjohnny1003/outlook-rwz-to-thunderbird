@@ -34,78 +34,109 @@ var rwzFilters = class extends (ExtensionCommonModule?.ExtensionCommon?.Extensio
           return account.incomingServer.rootFolder.URI;
         },
 
-        async importRules(accountId, rules) {
+        async importRules(accountId, datContent, rulesJson) {
           if (!MailServices) {
             throw new Error('無法存取 Thunderbird MailServices 內部服務');
           }
 
-          const account = MailServices.accounts.getAccount(accountId);
+          // 1. Resolve Account
+          let account = null;
+          try {
+            account = MailServices.accounts.getAccount(accountId);
+          } catch (_) {}
+
+          if (!account && MailServices.accounts.accounts) {
+            for (const acc of MailServices.accounts.accounts) {
+              if (acc.key === accountId || (acc.incomingServer && acc.incomingServer.key === accountId)) {
+                account = acc;
+                break;
+              }
+            }
+          }
+
           if (!account) {
             throw new Error(`找不到指定的郵件帳號: ${accountId}`);
           }
 
-          const rootFolder = account.incomingServer.rootFolder;
-          const filterList = MailServices.filters.getFilterList(rootFolder);
-          if (!filterList) {
-            throw new Error(`無法取得帳號「${account.key}」的篩選器清單`);
+          const rootFolder = account.incomingServer ? account.incomingServer.rootFolder : null;
+          if (!rootFolder) {
+            throw new Error(`無法取得帳號「${account.key}」的根目錄`);
           }
 
-          let addedCount = 0;
+          const filterList = MailServices.filters.getFilterList(rootFolder);
 
-          for (const r of rules) {
+          // 2. Identify target file
+          let targetFile = null;
+          if (filterList && filterList.defaultFile) {
+            targetFile = filterList.defaultFile;
+          } else if (rootFolder.filePath) {
+            targetFile = rootFolder.filePath.clone();
+            targetFile.append('msgFilterRules.dat');
+          }
+
+          // 3. Read existing file if present
+          let existingText = '';
+          if (targetFile && targetFile.exists()) {
             try {
-              // 1. Create filter
-              const filter = filterList.createFilter(r.name || 'Outlook Converted Filter');
-              filter.enabled = Boolean(r.enabled);
-              filter.filterType = r.filterType || 17; // 1 (Inbox) | 16 (Manual)
-
-              // 2. Add Actions
-              if (r.actions && Array.isArray(r.actions)) {
-                for (const act of r.actions) {
-                  const actionObj = filter.createAction();
-                  actionObj.type = act.type; // integer action type
-
-                  if (act.targetFolderUri) {
-                    actionObj.targetFolderUri = act.targetFolderUri;
-                  }
-                  if (act.strValue) {
-                    actionObj.strValue = act.strValue;
-                  }
-                  if (act.priority) {
-                    // map priority string
-                    actionObj.priority = act.priority === 'Highest' ? 5 :
-                                         act.priority === 'High' ? 4 :
-                                         act.priority === 'Low' ? 2 :
-                                         act.priority === 'Lowest' ? 1 : 3;
-                  }
-                  filter.appendAction(actionObj);
-                }
+              const fstream = Components.classes['@mozilla.org/network/file-input-stream;1']
+                .createInstance(Components.interfaces.nsIFileInputStream);
+              const cstream = Components.classes['@mozilla.org/intl/converter-input-stream;1']
+                .createInstance(Components.interfaces.nsIConverterInputStream);
+              fstream.init(targetFile, -1, 0, 0);
+              cstream.init(fstream, 'UTF-8', 1024, Components.interfaces.nsIConverterInputStream.DEFAULT_REPLACEMENT_CHARACTER);
+              const readChunk = {};
+              while (cstream.readString(4096, readChunk) !== 0) {
+                existingText += readChunk.value;
               }
-
-              // 3. Parse condition
-              if (r.condition && r.condition !== 'ALL') {
-                filterList.parseCondition(filter, r.condition);
-              }
-
-              // 4. Insert into list
-              filterList.insertFilterAt(filterList.filterCount, filter);
-              addedCount++;
-            } catch (ruleErr) {
-              console.error(`[rwzFilters] 匯入規則「${r.name}」失敗:`, ruleErr);
+              cstream.close();
+            } catch (readErr) {
+              console.warn('[rwzFilters] 讀取現存 filter 警告:', readErr);
             }
           }
 
-          // 5. Persist changes to disk (msgFilterRules.dat)
-          try {
-            filterList.saveToDefaultFile();
-          } catch (saveErr) {
-            console.warn('[rwzFilters] saveToDefaultFile 警告:', saveErr);
+          // 4. Merge rules
+          let finalDat = datContent;
+          if (existingText && existingText.trim()) {
+            const cleanNew = datContent
+              .split('\n')
+              .filter(l => !l.startsWith('version=') && !l.startsWith('logging='))
+              .join('\n')
+              .trim();
+            finalDat = existingText.trimEnd() + '\n\n' + cleanNew + '\n';
           }
+
+          // 5. Write to disk
+          if (targetFile) {
+            const foStream = Components.classes['@mozilla.org/network/file-output-stream;1']
+              .createInstance(Components.interfaces.nsIFileOutputStream);
+            // 0x02: PR_WRONLY, 0x08: PR_CREATE_FILE, 0x20: PR_TRUNCATE
+            foStream.init(targetFile, 0x02 | 0x08 | 0x20, 0o664, 0);
+            const converter = Components.classes['@mozilla.org/intl/converter-output-stream;1']
+              .createInstance(Components.interfaces.nsIConverterOutputStream);
+            converter.init(foStream, 'UTF-8', 0, 0);
+            converter.writeString(finalDat);
+            converter.close();
+            foStream.close();
+          }
+
+          // 6. Reload in-memory filter list
+          if (filterList) {
+            try {
+              if (typeof filterList.reload === 'function') {
+                filterList.reload();
+              } else {
+                MailServices.filters.getFilterList(rootFolder);
+              }
+            } catch (_) {}
+          }
+
+          const matchRules = datContent.match(/^name=/gm);
+          const totalImported = matchRules ? matchRules.length : 1;
 
           return {
             success: true,
-            totalImported: addedCount,
-            accountName: account.incomingServer.prettyName || accountId
+            totalImported,
+            accountName: account.incomingServer.prettyName || account.key
           };
         },
 
