@@ -14,14 +14,14 @@
     "gecko": {
       "id": "{7e324022-26f1-432d-b0dc-08bbd5573e87}",
       "strict_min_version": "102.0",
-      "strict_max_version": "160.*"
+      "strict_max_version": "156.*"
     }
   },
   "applications": {
     "gecko": {
       "id": "{7e324022-26f1-432d-b0dc-08bbd5573e87}",
       "strict_min_version": "102.0",
-      "strict_max_version": "160.*"
+      "strict_max_version": "156.*"
     }
   },
   "permissions": [
