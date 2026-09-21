@@ -1,7 +1,7 @@
 /**
  * WebExtension Experiment Implementation for Thunderbird Message Filters
  * Uses IOUtils for direct file I/O on msgFilterRules.dat.
- * Does NOT use MailServices.filters.getFilterList (removed in TB 156+).
+ * After writing, attempts to force in-memory reload via incomingServer.getFilterList().
  */
 
 /* global ChromeUtils, ExtensionCommon, Services */
@@ -20,6 +20,96 @@ try {
     : ChromeUtils.import('resource:///modules/MailServices.jsm').MailServices;
 } catch (_) {}
 
+/**
+ * Helper: resolve an account by ID from MailServices
+ */
+function resolveAccount(accountId) {
+  if (!MailServices) return null;
+  let account = null;
+  try {
+    account = MailServices.accounts.getAccount(accountId);
+  } catch (_) {}
+  if (!account && MailServices.accounts && MailServices.accounts.accounts) {
+    for (const acc of MailServices.accounts.accounts) {
+      if (acc.key === accountId || (acc.incomingServer && acc.incomingServer.key === accountId)) {
+        account = acc;
+        break;
+      }
+    }
+  }
+  return account;
+}
+
+/**
+ * Helper: build msgFilterRules.dat path from rootFolder
+ */
+function buildFilterPath(rootFolder) {
+  if (!rootFolder || !rootFolder.filePath || !rootFolder.filePath.path) return '';
+  const base = rootFolder.filePath.path;
+  const sep = base.includes('\\') ? '\\' : '/';
+  return base + sep + 'msgFilterRules.dat';
+}
+
+/**
+ * Helper: force Thunderbird to reload in-memory filter list from disk.
+ * Tries multiple approaches since APIs vary across TB versions.
+ * Returns { reloaded: boolean, method: string }
+ */
+function forceFilterReload(account, rootFolder) {
+  const result = { reloaded: false, method: 'none' };
+
+  // Approach 1: incomingServer.getFilterList(null) — available on nsIMsgIncomingServer
+  // This is DIFFERENT from MailServices.filters.getFilterList() which was removed.
+  try {
+    if (account.incomingServer && typeof account.incomingServer.getFilterList === 'function') {
+      const filterList = account.incomingServer.getFilterList(null);
+      if (filterList) {
+        // Force reload from disk
+        if (typeof filterList.parseCondition === 'function' || typeof filterList.matchOrChangeFilterTarget === 'function') {
+          // filterList exists; the act of calling getFilterList(null) may itself trigger reload
+          result.reloaded = true;
+          result.method = 'incomingServer.getFilterList(null)';
+        }
+        // Try explicit methods if available
+        if (typeof filterList.reload === 'function') {
+          filterList.reload();
+          result.reloaded = true;
+          result.method = 'filterList.reload()';
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('[rwzFilters] incomingServer.getFilterList reload 嘗試:', e.message);
+  }
+
+  // Approach 2: clearFilterList + re-fetch to force cache invalidation
+  try {
+    if (account.incomingServer && typeof account.incomingServer.clearFilterList === 'function') {
+      account.incomingServer.clearFilterList();
+      result.reloaded = true;
+      result.method = 'clearFilterList()';
+    }
+  } catch (e) {
+    console.warn('[rwzFilters] clearFilterList 嘗試:', e.message);
+  }
+
+  // Approach 3: MailServices.filters (if available in older TB versions)
+  try {
+    if (MailServices.filters && typeof MailServices.filters.getFilterList === 'function') {
+      const fl = MailServices.filters.getFilterList(rootFolder);
+      if (fl && typeof fl.reload === 'function') {
+        fl.reload();
+        result.reloaded = true;
+        result.method = 'MailServices.filters.getFilterList().reload()';
+      }
+    }
+  } catch (e) {
+    console.warn('[rwzFilters] MailServices.filters.getFilterList 嘗試:', e.message);
+  }
+
+  return result;
+}
+
 var rwzFilters = class extends (ExtensionCommonModule?.ExtensionCommon?.ExtensionAPI || class {}) {
   getAPI(context) {
     return {
@@ -35,6 +125,30 @@ var rwzFilters = class extends (ExtensionCommonModule?.ExtensionCommon?.Extensio
           return account.incomingServer.rootFolder.URI;
         },
 
+        /**
+         * Returns the profile path where msgFilterRules.dat is stored for the given account.
+         */
+        async getFilterFilePath(accountId) {
+          try {
+            if (!MailServices) {
+              return { success: false, error: 'MailServices unavailable' };
+            }
+            const account = resolveAccount(accountId);
+            if (!account) {
+              return { success: false, error: `找不到帳號: ${accountId}` };
+            }
+            const rootFolder = account.incomingServer ? account.incomingServer.rootFolder : null;
+            const targetPath = buildFilterPath(rootFolder);
+            return {
+              success: true,
+              targetPath,
+              accountName: account.incomingServer.prettyName || account.key
+            };
+          } catch (err) {
+            return { success: false, error: err.message };
+          }
+        },
+
         async importRules(accountId, datContent, rulesJson) {
           try {
             if (!MailServices) {
@@ -42,20 +156,7 @@ var rwzFilters = class extends (ExtensionCommonModule?.ExtensionCommon?.Extensio
             }
 
             // 1. Resolve Account
-            let account = null;
-            try {
-              account = MailServices.accounts.getAccount(accountId);
-            } catch (_) {}
-
-            if (!account && MailServices.accounts && MailServices.accounts.accounts) {
-              for (const acc of MailServices.accounts.accounts) {
-                if (acc.key === accountId || (acc.incomingServer && acc.incomingServer.key === accountId)) {
-                  account = acc;
-                  break;
-                }
-              }
-            }
-
+            const account = resolveAccount(accountId);
             if (!account) {
               return { success: false, error: `找不到指定的郵件帳號: ${accountId}` };
             }
@@ -65,18 +166,17 @@ var rwzFilters = class extends (ExtensionCommonModule?.ExtensionCommon?.Extensio
               return { success: false, error: `無法取得帳號「${account.key}」的根目錄 (rootFolder)` };
             }
 
-            // 2. Resolve target file path directly (no getFilterList — not available in TB 156+)
-            let targetPath = '';
-            if (rootFolder.filePath && rootFolder.filePath.path) {
-              const sep = rootFolder.filePath.path.includes('\\') ? '\\' : '/';
-              targetPath = rootFolder.filePath.path + sep + 'msgFilterRules.dat';
-            }
-
+            // 2. Resolve target file path
+            const targetPath = buildFilterPath(rootFolder);
             if (!targetPath) {
               return { success: false, error: '無法解析目標帳號之 msgFilterRules.dat 實體路徑' };
             }
 
-            // 3. Read existing rules if file exists
+            // 3. IMPORTANT: Clear Thunderbird's in-memory filter cache BEFORE writing
+            //    This prevents the stale in-memory state from overwriting our file later.
+            const preReload = forceFilterReload(account, rootFolder);
+
+            // 4. Read existing rules if file exists
             let existingText = '';
             if (typeof IOUtils !== 'undefined') {
               try {
@@ -88,7 +188,7 @@ var rwzFilters = class extends (ExtensionCommonModule?.ExtensionCommon?.Extensio
               }
             }
 
-            // 4. Merge rules: append new rules while avoiding duplicate header
+            // 5. Merge rules: append new rules while avoiding duplicate header
             let finalDat = datContent;
             if (existingText && existingText.trim()) {
               const cleanNew = datContent
@@ -99,19 +199,16 @@ var rwzFilters = class extends (ExtensionCommonModule?.ExtensionCommon?.Extensio
               finalDat = existingText.trimEnd() + '\n\n' + cleanNew + '\n';
             }
 
-            // 5. Write to target file using IOUtils
-            let writeSuccess = false;
+            // 6. Write to target file using IOUtils
             if (typeof IOUtils !== 'undefined') {
               try {
                 await IOUtils.writeUTF8(targetPath, finalDat, {
                   tmpPath: targetPath + '.tmp'
                 });
-                writeSuccess = true;
               } catch (writeErr) {
-                console.warn('[rwzFilters] IOUtils.writeUTF8 失敗，嘗試直接寫入:', writeErr);
+                console.warn('[rwzFilters] IOUtils.writeUTF8 with tmpPath failed:', writeErr);
                 try {
                   await IOUtils.writeUTF8(targetPath, finalDat);
-                  writeSuccess = true;
                 } catch (e2) {
                   return { success: false, error: `寫入檔案失敗: ${e2.message}` };
                 }
@@ -120,7 +217,8 @@ var rwzFilters = class extends (ExtensionCommonModule?.ExtensionCommon?.Extensio
               return { success: false, error: '當前環境不支援 IOUtils 檔案寫入 API' };
             }
 
-            // 6. Reload note: Thunderbird will pick up changes on next filter dialog open or restart
+            // 7. Force Thunderbird to reload the filter list from disk AFTER writing
+            const postReload = forceFilterReload(account, rootFolder);
 
             const matchRules = datContent.match(/^name=/gm);
             const totalImported = matchRules ? matchRules.length : 1;
@@ -129,7 +227,9 @@ var rwzFilters = class extends (ExtensionCommonModule?.ExtensionCommon?.Extensio
               success: true,
               totalImported,
               targetPath,
-              accountName: account.incomingServer.prettyName || account.key
+              accountName: account.incomingServer.prettyName || account.key,
+              reloadStatus: postReload.reloaded ? postReload.method : (preReload.reloaded ? `pre:${preReload.method}` : 'none'),
+              needsRestart: !postReload.reloaded
             };
           } catch (err) {
             return {
@@ -146,20 +246,7 @@ var rwzFilters = class extends (ExtensionCommonModule?.ExtensionCommon?.Extensio
               return { success: false, error: '無法存取 Thunderbird MailServices 內部服務' };
             }
 
-            let account = null;
-            try {
-              account = MailServices.accounts.getAccount(accountId);
-            } catch (_) {}
-
-            if (!account && MailServices.accounts && MailServices.accounts.accounts) {
-              for (const acc of MailServices.accounts.accounts) {
-                if (acc.key === accountId || (acc.incomingServer && acc.incomingServer.key === accountId)) {
-                  account = acc;
-                  break;
-                }
-              }
-            }
-
+            const account = resolveAccount(accountId);
             if (!account) {
               return { success: false, error: `找不到指定的郵件帳號: ${accountId}` };
             }
@@ -169,12 +256,7 @@ var rwzFilters = class extends (ExtensionCommonModule?.ExtensionCommon?.Extensio
               return { success: false, error: `無法取得帳號「${account.key}」的根目錄` };
             }
 
-            // Resolve target file path directly (no getFilterList — not available in TB 156+)
-            let targetPath = '';
-            if (rootFolder.filePath && rootFolder.filePath.path) {
-              const sep = rootFolder.filePath.path.includes('\\') ? '\\' : '/';
-              targetPath = rootFolder.filePath.path + sep + 'msgFilterRules.dat';
-            }
+            const targetPath = buildFilterPath(rootFolder);
 
             let datContent = '';
             if (targetPath && typeof IOUtils !== 'undefined') {

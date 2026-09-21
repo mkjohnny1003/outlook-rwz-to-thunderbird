@@ -440,24 +440,107 @@
         if (!result.success) {
           throw new Error(result.error || '核心寫入失敗');
         }
-        log(`🎉 匯入成功！共建立並套用 ${result.totalImported} 條篩選器，已直接生效！`, 'success');
+        log(`🎉 匯入成功！共寫入 ${result.totalImported} 條篩選器！`, 'success');
         if (result.targetPath) {
-          log(`檔案已成功寫入至帳號實體目錄: ${result.targetPath}`, 'info');
+          log(`檔案已寫入: ${result.targetPath}`, 'info');
         }
-        alert(`成功匯入 ${result.totalImported} 條規則至「${selectedAccount.name}」！\n您可至 Thunderbird 的「工具」>「郵件篩選器」中檢視。`);
+        if (result.reloadStatus && result.reloadStatus !== 'none') {
+          log(`記憶體快取重新載入方式: ${result.reloadStatus}`, 'info');
+        }
+
+        // Build post-import message
+        let alertMsg = `✅ 成功匯入 ${result.totalImported} 條規則至「${selectedAccount.name}」！\n`;
+        alertMsg += `\n檔案路徑: ${result.targetPath}\n`;
+
+        if (result.needsRestart) {
+          alertMsg += `\n⚠️ 重要提示：\n`;
+          alertMsg += `Thunderbird 的記憶體快取可能尚未更新。\n`;
+          alertMsg += `請依照以下步驟確保規則生效：\n\n`;
+          alertMsg += `方法 1（推薦）：完全關閉並重新啟動 Thunderbird\n`;
+          alertMsg += `方法 2：至「工具」→「郵件篩選器」，關閉後再開啟\n\n`;
+          alertMsg += `若重啟後仍未看到規則，系統已同時備份下載 msgFilterRules.dat，\n`;
+          alertMsg += `請手動將該檔案放至上述路徑覆蓋即可。`;
+
+          log('⚠️ Thunderbird 記憶體快取可能需要重啟才能刷新。建議完全關閉並重新啟動 Thunderbird。', 'warn');
+          log(`📋 若需手動放入，請將 msgFilterRules.dat 放至: ${result.targetPath}`, 'info');
+
+          // Auto-download as backup
+          autoDownloadDatBackup(datContent);
+        } else {
+          alertMsg += `\n已自動重新載入記憶體快取，規則應已立即生效！`;
+          alertMsg += `\n請至「工具」→「郵件篩選器」確認。`;
+          log('已自動重新載入 Thunderbird 記憶體中的篩選器快取。', 'success');
+        }
+
+        alert(alertMsg);
       } else {
         // Fallback when Experiment API not accessible in this context
         log('未偵測到 Experiment 權限，已為您自動建立所需資料夾，並準備產生 msgFilterRules.dat 檔案。', 'warn');
+        showManualImportGuide();
         handleDownloadDat();
       }
     } catch (err) {
       log(`核心寫入發生例外: ${err.message}，自動切換為下載 msgFilterRules.dat 規則檔...`, 'warn');
+
+      // Try to get the profile path for guidance
+      let profilePath = '';
+      try {
+        if (typeof messenger !== 'undefined' && messenger.rwzFilters && messenger.rwzFilters.getFilterFilePath) {
+          const pathResult = await messenger.rwzFilters.getFilterFilePath(selectedAccount.id);
+          if (pathResult.success) {
+            profilePath = pathResult.targetPath;
+          }
+        }
+      } catch (_) {}
+
       handleDownloadDat();
-      alert(`核心直接寫入失敗（${err.message}）。\n\n別擔心！所有資料夾皆已自動建立完成，系統已自動為您下載 msgFilterRules.dat 規則檔！`);
+
+      let fallbackMsg = `核心直接寫入失敗（${err.message}）。\n\n`;
+      fallbackMsg += `別擔心！所有資料夾皆已自動建立完成，系統已自動為您下載 msgFilterRules.dat 規則檔！\n\n`;
+      if (profilePath) {
+        fallbackMsg += `📁 請將下載的 msgFilterRules.dat 放至:\n${profilePath}\n\n`;
+        fallbackMsg += `然後重新啟動 Thunderbird 即可。`;
+        log(`📋 手動放入路徑: ${profilePath}`, 'info');
+      } else {
+        fallbackMsg += `請至 Thunderbird：說明 → 疑難排解資訊 → 側寫檔案資料夾 → 開啟資料夾\n`;
+        fallbackMsg += `然後進入 Mail/ 下對應的帳號目錄，替換 msgFilterRules.dat。`;
+      }
+      alert(fallbackMsg);
     } finally {
       directImportBtn.disabled = false;
       updateRulesTable();
     }
+  }
+
+  // Auto-download dat file as backup (no user interaction needed)
+  function autoDownloadDatBackup(datContent) {
+    try {
+      const blob = new Blob([datContent], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'msgFilterRules.dat';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      log('📥 已同時備份下載 msgFilterRules.dat（以備手動替換之需）。', 'info');
+    } catch (e) {
+      console.warn('[autoDownloadDatBackup]', e);
+    }
+  }
+
+  // Show manual import guide in log
+  function showManualImportGuide() {
+    log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
+    log('📖 手動匯入說明：', 'info');
+    log('1. 先完全關閉 Thunderbird', 'info');
+    log('2. 在 Thunderbird 中點選「說明 → 疑難排解資訊」', 'info');
+    log('3. 找到「側寫檔案資料夾」→ 點擊「開啟資料夾」', 'info');
+    log('4. 進入 Mail/ 或 ImapMail/ 下對應的帳號目錄', 'info');
+    log('5. 將下載的 msgFilterRules.dat 放入該目錄（覆蓋舊檔）', 'info');
+    log('6. 重新啟動 Thunderbird → 工具 → 郵件篩選器 即可看到規則', 'info');
+    log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
   }
 
   // Handle Download msgFilterRules.dat

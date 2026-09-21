@@ -47,6 +47,19 @@
         "parameters": []
       },
       {
+        "name": "getFilterFilePath",
+        "type": "function",
+        "description": "Returns the file system path of msgFilterRules.dat for the given account",
+        "async": true,
+        "parameters": [
+          {
+            "name": "accountId",
+            "type": "string",
+            "description": "The target Thunderbird account ID"
+          }
+        ]
+      },
+      {
         "name": "exportAccountRules",
         "type": "function",
         "description": "Exports current message filter rules from a Thunderbird account as msgFilterRules.dat content",
