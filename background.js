@@ -7,7 +7,7 @@
 const api = typeof messenger !== 'undefined' ? messenger : browser;
 
 // Listen for action button click in toolbar
-const actionApi = api.action || api.browserAction;
+const actionApi = api.browserAction || api.action;
 
 if (actionApi && actionApi.onClicked) {
   actionApi.onClicked.addListener(async () => {
