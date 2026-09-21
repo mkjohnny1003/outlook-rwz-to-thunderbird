@@ -205,11 +205,12 @@
         }
         parsedRwz = RwzParser.parse(buffer);
 
-        fileVersionEl.textContent = parsedRwz.version;
+        const verDisplay = parsedRwz.versionLabel || parsedRwz.version;
+        fileVersionEl.textContent = verDisplay;
         ruleCountEl.textContent = `${parsedRwz.rules.length} 條規則`;
         fileSummary.style.display = 'grid';
 
-        log(`成功解析 RWZ 檔案！偵測到版本: ${parsedRwz.version}，共 ${parsedRwz.rules.length} 條規則。`, 'success');
+        log(`成功解析 RWZ 檔案！偵測到版本: ${verDisplay}，共 ${parsedRwz.rules.length} 條規則。`, 'success');
 
         directImportBtn.disabled = parsedRwz.rules.length === 0;
         downloadDatBtn.disabled = parsedRwz.rules.length === 0;
