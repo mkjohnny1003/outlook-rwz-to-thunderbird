@@ -1,0 +1,45 @@
+[
+  {
+    "namespace": "rwzFilters",
+    "description": "Privileged API for managing Thunderbird message filter rules directly",
+    "functions": [
+      {
+        "name": "importRules",
+        "type": "function",
+        "description": "Directly imports converted rules into Thunderbird native message filter list",
+        "async": true,
+        "parameters": [
+          {
+            "name": "accountId",
+            "type": "string",
+            "description": "The target Thunderbird account ID"
+          },
+          {
+            "name": "rules",
+            "type": "any",
+            "description": "Array of structured rule definitions"
+          }
+        ]
+      },
+      {
+        "name": "getAccountRootFolderUri",
+        "type": "function",
+        "description": "Returns the native XPCOM URI of an account's root folder",
+        "async": true,
+        "parameters": [
+          {
+            "name": "accountId",
+            "type": "string"
+          }
+        ]
+      },
+      {
+        "name": "isAvailable",
+        "type": "function",
+        "description": "Checks if the Experiment API is loaded and available",
+        "async": true,
+        "parameters": []
+      }
+    ]
+  }
+]

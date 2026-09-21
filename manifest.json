@@ -1,0 +1,37 @@
+{
+  "manifest_version": 3,
+  "name": "Outlook RWZ to Thunderbird Filters",
+  "short_name": "RWZ to Thunderbird",
+  "version": "1.0.0",
+  "description": "將 Outlook 的 .rwz 規則檔轉換為 Thunderbird 郵件篩選器，若資料夾不存在時自動直接建立相對應的資料夾。",
+  "author": "mkjohnny1003",
+  "homepage_url": "https://github.com/mkjohnny1003/outlook-rwz-to-thunderbird",
+  "icons": {
+    "48": "icons/icon-48.png",
+    "96": "icons/icon-96.png"
+  },
+  "permissions": [
+    "accountsRead",
+    "accountsFolders",
+    "messagesRead",
+    "storage",
+    "downloads"
+  ],
+  "action": {
+    "default_title": "Outlook RWZ 轉 Thunderbird 篩選器工具",
+    "default_icon": "icons/icon-48.png"
+  },
+  "background": {
+    "scripts": ["background.js"]
+  },
+  "experiment_apis": {
+    "rwzFilters": {
+      "schema": "api/filters/schema.json",
+      "parent": {
+        "scopes": ["addon_parent"],
+        "paths": [["rwzFilters"]],
+        "script": "api/filters/implementation.js"
+      }
+    }
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "name": "outlook-rwz-to-thunderbird",
+  "version": "1.0.0",
+  "description": "Mozilla Thunderbird 附加元件：將 Outlook .rwz 規則檔轉換為 Thunderbird 郵件篩選器，並自動建立不存在的資料夾。",
+  "main": "background.js",
+  "scripts": {
+    "test": "node test/run-all.js",
+    "build": "bash build.sh"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mkjohnny1003/outlook-rwz-to-thunderbird.git"
+  },
+  "keywords": [
+    "thunderbird",
+    "outlook",
+    "rwz",
+    "filters",
+    "mail-extension",
+    "converter",
+    "email-rules"
+  ],
+  "author": "mkjohnny1003 (https://github.com/mkjohnny1003)",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/mkjohnny1003/outlook-rwz-to-thunderbird/issues"
+  },
+  "homepage": "https://github.com/mkjohnny1003/outlook-rwz-to-thunderbird#readme"
+}

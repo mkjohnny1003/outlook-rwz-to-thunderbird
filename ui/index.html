@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Outlook RWZ 轉 Thunderbird 篩選器轉換工具</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-container">
+    <header class="app-header">
+      <div class="header-left">
+        <div class="logo-icon">📬</div>
+        <div>
+          <h1>Outlook RWZ 轉 Thunderbird 篩選器工具</h1>
+          <p class="subtitle">自動解析 Outlook 二進位規則檔，遇不存在資料夾自動於 Thunderbird 中建立</p>
+        </div>
+      </div>
+      <div class="header-right">
+        <a href="https://github.com/mkjohnny1003/outlook-rwz-to-thunderbird" target="_blank" class="github-link" title="前往 GitHub 開源專案">
+          <svg height="20" width="20" viewBox="0 0 16 16" fill="currentColor">
+            <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
+          </svg>
+          <span>GitHub</span>
+        </a>
+      </div>
+    </header>
+
+    <main class="content-grid">
+      <!-- Step 1: Upload -->
+      <section class="card step-card">
+        <div class="card-header">
+          <span class="step-badge">1</span>
+          <h2>上傳 Outlook 規則檔 (.rwz)</h2>
+        </div>
+        <div class="drop-zone" id="dropZone">
+          <input type="file" id="fileInput" accept=".rwz" hidden>
+          <div class="drop-zone-icon">📥</div>
+          <p class="drop-zone-text">拖曳 <code>.rwz</code> 檔案至此，或 <button type="button" class="btn btn-secondary" id="browseBtn">選擇檔案</button></p>
+          <p class="drop-zone-hint">支援由 Outlook 98 ~ 2019+ 匯出的 Rules Wizard 二進位設定檔</p>
+        </div>
+        <div class="file-summary" id="fileSummary" style="display: none;">
+          <div class="summary-item"><strong>檔案名稱：</strong><span id="fileName">-</span></div>
+          <div class="summary-item"><strong>檔案大小：</strong><span id="fileSize">-</span></div>
+          <div class="summary-item"><strong>Outlook 版本：</strong><span class="badge badge-info" id="fileVersion">-</span></div>
+          <div class="summary-item"><strong>規則數量：</strong><span class="badge badge-success" id="ruleCount">0 條</span></div>
+        </div>
+      </section>
+
+      <!-- Step 2: Target Account & Settings -->
+      <section class="card step-card">
+        <div class="card-header">
+          <span class="step-badge">2</span>
+          <h2>選擇 Thunderbird 目標帳號</h2>
+        </div>
+        <div class="form-group">
+          <label for="accountSelect">匯入目標帳號：</label>
+          <select id="accountSelect" class="form-select">
+            <option value="">載入帳號清單中...</option>
+          </select>
+          <p class="form-help">篩選器與新建的資料夾將建立在所選的信箱或本地資料夾下。</p>
+        </div>
+
+        <div class="options-box">
+          <label class="checkbox-label">
+            <input type="checkbox" id="optAutoCreateFolders" checked>
+            <span class="checkbox-custom"></span>
+            <strong>若目標資料夾在 Thunderbird 不存在時，直接自動建立相對應資料夾</strong>
+          </label>
+          <p class="option-desc">當規則動作為「移動/複製到指定資料夾」時，系統若找不到該名稱之資料夾，將使用 Thunderbird 官方 API 自動建立包含多層路徑之階層資料夾。</p>
+        </div>
+      </section>
+
+      <!-- Step 3: Rules & Folder Preview -->
+      <section class="card full-width">
+        <div class="card-header space-between">
+          <div class="title-with-badge">
+            <span class="step-badge">3</span>
+            <h2>規則解析與資料夾狀態預覽</h2>
+          </div>
+          <div class="folder-status-summary" id="folderStatusSummary">
+            <span class="status-indicator">尚無資料</span>
+          </div>
+        </div>
+
+        <div class="table-container">
+          <table class="rules-table" id="rulesTable">
+            <thead>
+              <tr>
+                <th width="50">狀態</th>
+                <th width="200">規則名稱</th>
+                <th>觸發條件</th>
+                <th>執行動作</th>
+                <th width="220">目標資料夾狀態</th>
+              </tr>
+            </thead>
+            <tbody id="rulesTableBody">
+              <tr>
+                <td colspan="5" class="empty-state">尚未載入 .rwz 規則檔</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Step 4: Actions & Execution Log -->
+      <section class="card full-width">
+        <div class="card-header">
+          <span class="step-badge">4</span>
+          <h2>套用與匯出</h2>
+        </div>
+        <div class="actions-bar">
+          <button type="button" class="btn btn-primary" id="directImportBtn" disabled>
+            <span class="btn-icon">⚡</span> 直接匯入至 Thunderbird (免重啟)
+          </button>
+          <button type="button" class="btn btn-outline" id="downloadDatBtn" disabled>
+            <span class="btn-icon">💾</span> 下載 msgFilterRules.dat 檔案
+          </button>
+          <button type="button" class="btn btn-outline" id="exportJsonBtn" disabled>
+            <span class="btn-icon">📋</span> 匯出 JSON 結構
+          </button>
+        </div>
+
+        <div class="log-section">
+          <div class="log-header">
+            <h3>執行日誌紀錄</h3>
+            <button type="button" class="btn btn-sm btn-subtle" id="clearLogBtn">清空日誌</button>
+          </div>
+          <pre class="log-console" id="logConsole">等待操作...</pre>
+        </div>
+      </section>
+    </main>
+
+    <footer class="app-footer">
+      <p>Outlook RWZ to Thunderbird Filter Converter | 開源授權：MIT | 由 <a href="https://github.com/mkjohnny1003" target="_blank">mkjohnny1003</a> 維護</p>
+    </footer>
+  </div>
+
+  <script src="../lib/rwz-binary-reader.js"></script>
+  <script src="../lib/rwz-parser.js"></script>
+  <script src="../lib/folder-manager.js"></script>
+  <script src="../lib/filter-generator.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
