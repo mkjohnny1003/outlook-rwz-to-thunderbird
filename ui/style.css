@@ -453,3 +453,19 @@ h2 {
   color: var(--primary);
   text-decoration: none;
 }
+
+.donate-footer-note {
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.donate-link {
+  font-weight: 600;
+  color: #0070ba !important;
+  text-decoration: underline !important;
+}
+
+.donate-link:hover {
+  color: #003087 !important;
+}

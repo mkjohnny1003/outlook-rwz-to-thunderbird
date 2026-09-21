@@ -90,6 +90,22 @@
 
 ---
 
+## ☕ 支持與贊助 (Buy me a coffee)
+
+如果您覺得這個附加元件為您節省了大量手動搬遷 Outlook 規則與建立資料夾的時間，歡迎透過 PayPal 請作者喝杯咖啡或小額贊助（哪怕是 \$0.99 美元），您的肯定與支持是持續維護開源專案與相容新版 Thunderbird 的最大動力！
+
+<p align="center">
+  <a href="https://www.paypal.me/mkjohnny1003" target="_blank">
+    <img src="https://img.shields.io/badge/Donate-PayPal-blue.svg?style=for-the-badge&logo=paypal" alt="Donate with PayPal" />
+  </a>
+</p>
+
+- **贊助連結**：[點此透過 PayPal 贊助 (paypal.me/mkjohnny1003)](https://www.paypal.me/mkjohnny1003)
+- 任何建議或 Bug 回報，亦歡迎至 [GitHub Issues](https://github.com/mkjohnny1003/outlook-rwz-to-thunderbird/issues) 發起討論！
+
+
+---
+
 <br/>
 <br/>
 
@@ -164,6 +180,19 @@ node test/run-all.js
 # Build and package into .xpi
 bash build.sh
 ```
+
+## ☕ Support & Donations (Buy Me a Coffee)
+
+If this add-on saved you hours of tedious manual rule migration and folder creation, please consider supporting its development with a small donation (even **\$0.99 USD** helps a lot!). Your support helps keep this open-source project maintained and compatible with the latest Thunderbird releases.
+
+<p align="center">
+  <a href="https://www.paypal.me/mkjohnny1003" target="_blank">
+    <img src="https://img.shields.io/badge/Donate-PayPal-blue.svg?style=for-the-badge&logo=paypal" alt="Donate with PayPal" />
+  </a>
+</p>
+
+- **PayPal Link**: [Donate via PayPal (paypal.me/mkjohnny1003)](https://www.paypal.me/mkjohnny1003)
+- For issues, feature requests, or contributions, feel free to open a ticket on [GitHub Issues](https://github.com/mkjohnny1003/outlook-rwz-to-thunderbird/issues)!
 
 ---
 
