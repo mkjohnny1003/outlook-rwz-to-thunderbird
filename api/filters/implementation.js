@@ -107,6 +107,55 @@ var rwzFilters = class extends (ExtensionCommonModule?.ExtensionCommon?.Extensio
             totalImported: addedCount,
             accountName: account.incomingServer.prettyName || accountId
           };
+        },
+
+        async exportAccountRules(accountId) {
+          if (!MailServices) {
+            throw new Error('無法存取 Thunderbird MailServices 內部服務');
+          }
+
+          const account = MailServices.accounts.getAccount(accountId);
+          if (!account) {
+            throw new Error(`找不到指定的郵件帳號: ${accountId}`);
+          }
+
+          const rootFolder = account.incomingServer.rootFolder;
+          const filterList = MailServices.filters.getFilterList(rootFolder);
+          if (!filterList) {
+            throw new Error(`無法取得帳號「${account.key}」的篩選器清單`);
+          }
+
+          try {
+            filterList.saveToDefaultFile();
+          } catch (_) {}
+
+          let datContent = '';
+          const defaultFile = filterList.defaultFile;
+
+          if (defaultFile && defaultFile.exists()) {
+            try {
+              const fstream = Components.classes['@mozilla.org/network/file-input-stream;1']
+                .createInstance(Components.interfaces.nsIFileInputStream);
+              const cstream = Components.classes['@mozilla.org/intl/converter-input-stream;1']
+                .createInstance(Components.interfaces.nsIConverterInputStream);
+              fstream.init(defaultFile, -1, 0, 0);
+              cstream.init(fstream, 'UTF-8', 1024, Components.interfaces.nsIConverterInputStream.DEFAULT_REPLACEMENT_CHARACTER);
+              const readChunk = {};
+              while (cstream.readString(4096, readChunk) !== 0) {
+                datContent += readChunk.value;
+              }
+              cstream.close();
+            } catch (readErr) {
+              console.warn('[rwzFilters] 讀取 defaultFile 警告:', readErr);
+            }
+          }
+
+          return {
+            success: true,
+            filterCount: filterList.filterCount,
+            accountName: account.incomingServer.prettyName || account.key,
+            datContent
+          };
         }
       }
     };

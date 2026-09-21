@@ -39,6 +39,19 @@
         "description": "Checks if the Experiment API is loaded and available",
         "async": true,
         "parameters": []
+      },
+      {
+        "name": "exportAccountRules",
+        "type": "function",
+        "description": "Exports current message filter rules from a Thunderbird account as msgFilterRules.dat content",
+        "async": true,
+        "parameters": [
+          {
+            "name": "accountId",
+            "type": "string",
+            "description": "The target Thunderbird account ID"
+          }
+        ]
       }
     ]
   }

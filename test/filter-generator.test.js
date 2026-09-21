@@ -99,6 +99,26 @@ function runTests() {
 
     console.log('✓ Experiment API 載荷轉換正確');
   }
+
+  // Test robustness against non-string values (numbers, objects, arrays, null)
+  {
+    const rule = {
+      name: 104, // number as name
+      conditions: [
+        { type: 'from', values: [12345, { email: 'user@example.com' }, ['nested@test.com']] },
+        { type: 'priority', value: 2 },
+        { type: 'subject', values: [null, undefined, 42] }
+      ]
+    };
+    const condStr = FilterGenerator.buildConditionString(rule);
+    assert.ok(condStr.includes('12345'));
+    assert.ok(condStr.includes('user@example.com'));
+    assert.ok(condStr.includes('nested@test.com'));
+    assert.ok(condStr.includes('42'));
+    const datContent = FilterGenerator.generateMsgFilterRulesDat([rule]);
+    assert.ok(datContent.includes('name="104"'));
+    console.log('✓ 非字串值（數值、物件、巢狀陣列、null）之容錯與正規化完全正確');
+  }
 }
 
 runTests();

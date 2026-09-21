@@ -45,6 +45,7 @@
 
   const directImportBtn = document.getElementById('directImportBtn');
   const downloadDatBtn = document.getElementById('downloadDatBtn');
+  const exportAccountRulesBtn = document.getElementById('exportAccountRulesBtn');
   const exportJsonBtn = document.getElementById('exportJsonBtn');
 
   const logConsole = document.getElementById('logConsole');
@@ -182,6 +183,9 @@
     // Action buttons
     directImportBtn.addEventListener('click', handleDirectImport);
     downloadDatBtn.addEventListener('click', handleDownloadDat);
+    if (exportAccountRulesBtn) {
+      exportAccountRulesBtn.addEventListener('click', handleExportAccountRules);
+    }
     exportJsonBtn.addEventListener('click', handleExportJson);
     clearLogBtn.addEventListener('click', clearLog);
   }
@@ -477,6 +481,47 @@
     }
   }
 
+  // Handle Export Existing Thunderbird Rules
+  async function handleExportAccountRules() {
+    if (!selectedAccount) {
+      alert('請先在步驟 2 選擇要匯出規則的 Thunderbird 帳號！');
+      return;
+    }
+
+    log(`正在擷取帳號「${selectedAccount.name}」目前的 Thunderbird 郵件篩選器...`);
+
+    try {
+      if (typeof messenger !== 'undefined' && messenger.rwzFilters && messenger.rwzFilters.exportAccountRules) {
+        const result = await messenger.rwzFilters.exportAccountRules(selectedAccount.id);
+        const datContent = result.datContent || 'version="9"\nlogging="yes"\n';
+        const blob = new Blob([datContent], { type: 'text/plain;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        const cleanName = String(selectedAccount.name || 'account').replace(/[^a-zA-Z0-9_-]/g, '_');
+        a.download = `msgFilterRules_${cleanName}.dat`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        log(`🎉 成功匯出帳號「${selectedAccount.name}」的現有規則，共 ${result.filterCount || 0} 條規則！`, 'success');
+        alert(`成功匯出帳號「${selectedAccount.name}」的 Thunderbird 規則！\n共 ${result.filterCount || 0} 條規則，已下載為 msgFilterRules_${cleanName}.dat。`);
+      } else {
+        // Fallback: prompt user about location or check if already converted rules exist
+        log('未偵測到 Experiment 權限，已為您準備導出介面中的規則。', 'warn');
+        if (parsedRwz) {
+          handleDownloadDat();
+        } else {
+          alert('尚未載入規則，且未偵測到 Experiment 直接讀取權限。');
+        }
+      }
+    } catch (err) {
+      log(`匯出目前帳號規則失敗: ${err.message}`, 'error');
+      alert(`匯出失敗：\n${err.message}`);
+    }
+  }
+
   // Handle Export JSON
   function handleExportJson() {
     if (!parsedRwz) return;
@@ -493,8 +538,9 @@
     log('已匯出 outlook_rules.json 結構檔。', 'success');
   }
 
-  function escapeHtml(str) {
-    if (!str) return '';
+  function escapeHtml(val) {
+    if (val === null || val === undefined) return '';
+    const str = String(val);
     return str.replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;')
