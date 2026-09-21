@@ -436,9 +436,14 @@
 
       // 3. Direct injection via Experiment API
       if (typeof messenger !== 'undefined' && messenger.rwzFilters && messenger.rwzFilters.importRules) {
-        log(`正在寫入 ${parsedRwz.rules.length} 條規則至 Thunderbird 篩選器...`);
         const result = await messenger.rwzFilters.importRules(selectedAccount.id, datContent);
+        if (!result.success) {
+          throw new Error(result.error || '核心寫入失敗');
+        }
         log(`🎉 匯入成功！共建立並套用 ${result.totalImported} 條篩選器，已直接生效！`, 'success');
+        if (result.targetPath) {
+          log(`檔案已成功寫入至帳號實體目錄: ${result.targetPath}`, 'info');
+        }
         alert(`成功匯入 ${result.totalImported} 條規則至「${selectedAccount.name}」！\n您可至 Thunderbird 的「工具」>「郵件篩選器」中檢視。`);
       } else {
         // Fallback when Experiment API not accessible in this context

@@ -35,158 +35,193 @@ var rwzFilters = class extends (ExtensionCommonModule?.ExtensionCommon?.Extensio
         },
 
         async importRules(accountId, datContent, rulesJson) {
-          if (!MailServices) {
-            throw new Error('無法存取 Thunderbird MailServices 內部服務');
-          }
-
-          // 1. Resolve Account
-          let account = null;
           try {
-            account = MailServices.accounts.getAccount(accountId);
-          } catch (_) {}
-
-          if (!account && MailServices.accounts.accounts) {
-            for (const acc of MailServices.accounts.accounts) {
-              if (acc.key === accountId || (acc.incomingServer && acc.incomingServer.key === accountId)) {
-                account = acc;
-                break;
-              }
+            if (!MailServices) {
+              return { success: false, error: '無法存取 Thunderbird MailServices 內部服務' };
             }
-          }
 
-          if (!account) {
-            throw new Error(`找不到指定的郵件帳號: ${accountId}`);
-          }
-
-          const rootFolder = account.incomingServer ? account.incomingServer.rootFolder : null;
-          if (!rootFolder) {
-            throw new Error(`無法取得帳號「${account.key}」的根目錄`);
-          }
-
-          const filterList = MailServices.filters.getFilterList(rootFolder);
-
-          // 2. Identify target file
-          let targetFile = null;
-          if (filterList && filterList.defaultFile) {
-            targetFile = filterList.defaultFile;
-          } else if (rootFolder.filePath) {
-            targetFile = rootFolder.filePath.clone();
-            targetFile.append('msgFilterRules.dat');
-          }
-
-          // 3. Read existing file if present
-          let existingText = '';
-          if (targetFile && targetFile.exists()) {
+            // 1. Resolve Account
+            let account = null;
             try {
-              const fstream = Components.classes['@mozilla.org/network/file-input-stream;1']
-                .createInstance(Components.interfaces.nsIFileInputStream);
-              const cstream = Components.classes['@mozilla.org/intl/converter-input-stream;1']
-                .createInstance(Components.interfaces.nsIConverterInputStream);
-              fstream.init(targetFile, -1, 0, 0);
-              cstream.init(fstream, 'UTF-8', 1024, Components.interfaces.nsIConverterInputStream.DEFAULT_REPLACEMENT_CHARACTER);
-              const readChunk = {};
-              while (cstream.readString(4096, readChunk) !== 0) {
-                existingText += readChunk.value;
-              }
-              cstream.close();
-            } catch (readErr) {
-              console.warn('[rwzFilters] 讀取現存 filter 警告:', readErr);
-            }
-          }
-
-          // 4. Merge rules
-          let finalDat = datContent;
-          if (existingText && existingText.trim()) {
-            const cleanNew = datContent
-              .split('\n')
-              .filter(l => !l.startsWith('version=') && !l.startsWith('logging='))
-              .join('\n')
-              .trim();
-            finalDat = existingText.trimEnd() + '\n\n' + cleanNew + '\n';
-          }
-
-          // 5. Write to disk
-          if (targetFile) {
-            const foStream = Components.classes['@mozilla.org/network/file-output-stream;1']
-              .createInstance(Components.interfaces.nsIFileOutputStream);
-            // 0x02: PR_WRONLY, 0x08: PR_CREATE_FILE, 0x20: PR_TRUNCATE
-            foStream.init(targetFile, 0x02 | 0x08 | 0x20, 0o664, 0);
-            const converter = Components.classes['@mozilla.org/intl/converter-output-stream;1']
-              .createInstance(Components.interfaces.nsIConverterOutputStream);
-            converter.init(foStream, 'UTF-8', 0, 0);
-            converter.writeString(finalDat);
-            converter.close();
-            foStream.close();
-          }
-
-          // 6. Reload in-memory filter list
-          if (filterList) {
-            try {
-              if (typeof filterList.reload === 'function') {
-                filterList.reload();
-              } else {
-                MailServices.filters.getFilterList(rootFolder);
-              }
+              account = MailServices.accounts.getAccount(accountId);
             } catch (_) {}
+
+            if (!account && MailServices.accounts && MailServices.accounts.accounts) {
+              for (const acc of MailServices.accounts.accounts) {
+                if (acc.key === accountId || (acc.incomingServer && acc.incomingServer.key === accountId)) {
+                  account = acc;
+                  break;
+                }
+              }
+            }
+
+            if (!account) {
+              return { success: false, error: `找不到指定的郵件帳號: ${accountId}` };
+            }
+
+            const rootFolder = account.incomingServer ? account.incomingServer.rootFolder : null;
+            if (!rootFolder) {
+              return { success: false, error: `無法取得帳號「${account.key}」的根目錄 (rootFolder)` };
+            }
+
+            const filterList = MailServices.filters ? MailServices.filters.getFilterList(rootFolder) : null;
+
+            // 2. Resolve target file path
+            let targetPath = '';
+            if (filterList && filterList.defaultFile && filterList.defaultFile.path) {
+              targetPath = filterList.defaultFile.path;
+            } else if (rootFolder.filePath && rootFolder.filePath.path) {
+              const sep = rootFolder.filePath.path.includes('\\') ? '\\' : '/';
+              targetPath = rootFolder.filePath.path + sep + 'msgFilterRules.dat';
+            }
+
+            if (!targetPath) {
+              return { success: false, error: '無法解析目標帳號之 msgFilterRules.dat 實體路徑' };
+            }
+
+            // 3. Read existing rules if file exists
+            let existingText = '';
+            if (typeof IOUtils !== 'undefined') {
+              try {
+                if (await IOUtils.exists(targetPath)) {
+                  existingText = await IOUtils.readUTF8(targetPath);
+                }
+              } catch (readErr) {
+                console.warn('[rwzFilters] IOUtils.readUTF8 警告:', readErr);
+              }
+            }
+
+            // 4. Merge rules: append new rules while avoiding duplicate header
+            let finalDat = datContent;
+            if (existingText && existingText.trim()) {
+              const cleanNew = datContent
+                .split('\n')
+                .filter(l => !l.startsWith('version=') && !l.startsWith('logging='))
+                .join('\n')
+                .trim();
+              finalDat = existingText.trimEnd() + '\n\n' + cleanNew + '\n';
+            }
+
+            // 5. Write to target file using IOUtils
+            let writeSuccess = false;
+            if (typeof IOUtils !== 'undefined') {
+              try {
+                await IOUtils.writeUTF8(targetPath, finalDat, {
+                  tmpPath: targetPath + '.tmp'
+                });
+                writeSuccess = true;
+              } catch (writeErr) {
+                console.warn('[rwzFilters] IOUtils.writeUTF8 失敗，嘗試直接寫入:', writeErr);
+                try {
+                  await IOUtils.writeUTF8(targetPath, finalDat);
+                  writeSuccess = true;
+                } catch (e2) {
+                  return { success: false, error: `寫入檔案失敗: ${e2.message}` };
+                }
+              }
+            } else {
+              return { success: false, error: '當前環境不支援 IOUtils 檔案寫入 API' };
+            }
+
+            // 6. Reload in-memory filter list
+            if (filterList) {
+              try {
+                if (typeof filterList.reload === 'function') {
+                  filterList.reload();
+                } else if (typeof filterList.saveToDefaultFile === 'function') {
+                  filterList.saveToDefaultFile();
+                }
+              } catch (_) {}
+            }
+
+            const matchRules = datContent.match(/^name=/gm);
+            const totalImported = matchRules ? matchRules.length : 1;
+
+            return {
+              success: true,
+              totalImported,
+              targetPath,
+              accountName: account.incomingServer.prettyName || account.key
+            };
+          } catch (err) {
+            return {
+              success: false,
+              error: err.message,
+              stack: err.stack
+            };
           }
-
-          const matchRules = datContent.match(/^name=/gm);
-          const totalImported = matchRules ? matchRules.length : 1;
-
-          return {
-            success: true,
-            totalImported,
-            accountName: account.incomingServer.prettyName || account.key
-          };
         },
 
         async exportAccountRules(accountId) {
-          if (!MailServices) {
-            throw new Error('無法存取 Thunderbird MailServices 內部服務');
-          }
-
-          const account = MailServices.accounts.getAccount(accountId);
-          if (!account) {
-            throw new Error(`找不到指定的郵件帳號: ${accountId}`);
-          }
-
-          const rootFolder = account.incomingServer.rootFolder;
-          const filterList = MailServices.filters.getFilterList(rootFolder);
-          if (!filterList) {
-            throw new Error(`無法取得帳號「${account.key}」的篩選器清單`);
-          }
-
           try {
-            filterList.saveToDefaultFile();
-          } catch (_) {}
-
-          let datContent = '';
-          const defaultFile = filterList.defaultFile;
-
-          if (defaultFile && defaultFile.exists()) {
-            try {
-              const fstream = Components.classes['@mozilla.org/network/file-input-stream;1']
-                .createInstance(Components.interfaces.nsIFileInputStream);
-              const cstream = Components.classes['@mozilla.org/intl/converter-input-stream;1']
-                .createInstance(Components.interfaces.nsIConverterInputStream);
-              fstream.init(defaultFile, -1, 0, 0);
-              cstream.init(fstream, 'UTF-8', 1024, Components.interfaces.nsIConverterInputStream.DEFAULT_REPLACEMENT_CHARACTER);
-              const readChunk = {};
-              while (cstream.readString(4096, readChunk) !== 0) {
-                datContent += readChunk.value;
-              }
-              cstream.close();
-            } catch (readErr) {
-              console.warn('[rwzFilters] 讀取 defaultFile 警告:', readErr);
+            if (!MailServices) {
+              return { success: false, error: '無法存取 Thunderbird MailServices 內部服務' };
             }
-          }
 
-          return {
-            success: true,
-            filterCount: filterList.filterCount,
-            accountName: account.incomingServer.prettyName || account.key,
-            datContent
-          };
+            let account = null;
+            try {
+              account = MailServices.accounts.getAccount(accountId);
+            } catch (_) {}
+
+            if (!account && MailServices.accounts && MailServices.accounts.accounts) {
+              for (const acc of MailServices.accounts.accounts) {
+                if (acc.key === accountId || (acc.incomingServer && acc.incomingServer.key === accountId)) {
+                  account = acc;
+                  break;
+                }
+              }
+            }
+
+            if (!account) {
+              return { success: false, error: `找不到指定的郵件帳號: ${accountId}` };
+            }
+
+            const rootFolder = account.incomingServer ? account.incomingServer.rootFolder : null;
+            if (!rootFolder) {
+              return { success: false, error: `無法取得帳號「${account.key}」的根目錄` };
+            }
+
+            const filterList = MailServices.filters ? MailServices.filters.getFilterList(rootFolder) : null;
+            if (filterList && typeof filterList.saveToDefaultFile === 'function') {
+              try {
+                filterList.saveToDefaultFile();
+              } catch (_) {}
+            }
+
+            let targetPath = '';
+            if (filterList && filterList.defaultFile && filterList.defaultFile.path) {
+              targetPath = filterList.defaultFile.path;
+            } else if (rootFolder.filePath && rootFolder.filePath.path) {
+              const sep = rootFolder.filePath.path.includes('\\') ? '\\' : '/';
+              targetPath = rootFolder.filePath.path + sep + 'msgFilterRules.dat';
+            }
+
+            let datContent = '';
+            if (targetPath && typeof IOUtils !== 'undefined') {
+              try {
+                if (await IOUtils.exists(targetPath)) {
+                  datContent = await IOUtils.readUTF8(targetPath);
+                }
+              } catch (readErr) {
+                console.warn('[rwzFilters] exportAccountRules readUTF8 警告:', readErr);
+              }
+            }
+
+            const filterCount = filterList ? filterList.filterCount : (datContent.match(/^name=/gm) || []).length;
+
+            return {
+              success: true,
+              filterCount,
+              accountName: account.incomingServer.prettyName || account.key,
+              datContent
+            };
+          } catch (err) {
+            return {
+              success: false,
+              error: err.message,
+              stack: err.stack
+            };
+          }
         }
       }
     };
