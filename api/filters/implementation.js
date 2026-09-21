@@ -1,6 +1,7 @@
 /**
  * WebExtension Experiment Implementation for Thunderbird Message Filters
- * Grants direct, instant access to MailServices.filters without requiring Thunderbird restart.
+ * Uses IOUtils for direct file I/O on msgFilterRules.dat.
+ * Does NOT use MailServices.filters.getFilterList (removed in TB 156+).
  */
 
 /* global ChromeUtils, ExtensionCommon, Services */
@@ -64,13 +65,9 @@ var rwzFilters = class extends (ExtensionCommonModule?.ExtensionCommon?.Extensio
               return { success: false, error: `無法取得帳號「${account.key}」的根目錄 (rootFolder)` };
             }
 
-            const filterList = MailServices.filters ? MailServices.filters.getFilterList(rootFolder) : null;
-
-            // 2. Resolve target file path
+            // 2. Resolve target file path directly (no getFilterList — not available in TB 156+)
             let targetPath = '';
-            if (filterList && filterList.defaultFile && filterList.defaultFile.path) {
-              targetPath = filterList.defaultFile.path;
-            } else if (rootFolder.filePath && rootFolder.filePath.path) {
+            if (rootFolder.filePath && rootFolder.filePath.path) {
               const sep = rootFolder.filePath.path.includes('\\') ? '\\' : '/';
               targetPath = rootFolder.filePath.path + sep + 'msgFilterRules.dat';
             }
@@ -123,16 +120,7 @@ var rwzFilters = class extends (ExtensionCommonModule?.ExtensionCommon?.Extensio
               return { success: false, error: '當前環境不支援 IOUtils 檔案寫入 API' };
             }
 
-            // 6. Reload in-memory filter list
-            if (filterList) {
-              try {
-                if (typeof filterList.reload === 'function') {
-                  filterList.reload();
-                } else if (typeof filterList.saveToDefaultFile === 'function') {
-                  filterList.saveToDefaultFile();
-                }
-              } catch (_) {}
-            }
+            // 6. Reload note: Thunderbird will pick up changes on next filter dialog open or restart
 
             const matchRules = datContent.match(/^name=/gm);
             const totalImported = matchRules ? matchRules.length : 1;
@@ -181,17 +169,9 @@ var rwzFilters = class extends (ExtensionCommonModule?.ExtensionCommon?.Extensio
               return { success: false, error: `無法取得帳號「${account.key}」的根目錄` };
             }
 
-            const filterList = MailServices.filters ? MailServices.filters.getFilterList(rootFolder) : null;
-            if (filterList && typeof filterList.saveToDefaultFile === 'function') {
-              try {
-                filterList.saveToDefaultFile();
-              } catch (_) {}
-            }
-
+            // Resolve target file path directly (no getFilterList — not available in TB 156+)
             let targetPath = '';
-            if (filterList && filterList.defaultFile && filterList.defaultFile.path) {
-              targetPath = filterList.defaultFile.path;
-            } else if (rootFolder.filePath && rootFolder.filePath.path) {
+            if (rootFolder.filePath && rootFolder.filePath.path) {
               const sep = rootFolder.filePath.path.includes('\\') ? '\\' : '/';
               targetPath = rootFolder.filePath.path + sep + 'msgFilterRules.dat';
             }
@@ -207,7 +187,7 @@ var rwzFilters = class extends (ExtensionCommonModule?.ExtensionCommon?.Extensio
               }
             }
 
-            const filterCount = filterList ? filterList.filterCount : (datContent.match(/^name=/gm) || []).length;
+            const filterCount = (datContent.match(/^name=/gm) || []).length;
 
             return {
               success: true,
