@@ -71,6 +71,37 @@
             "description": "The target Thunderbird account ID"
           }
         ]
+      },
+      {
+        "name": "resolveFolderUris",
+        "type": "function",
+        "async": true,
+        "description": "Resolve WebExtension folder paths to native folder URIs",
+        "parameters": [
+          {
+            "name": "accountId",
+            "type": "string"
+          },
+          {
+            "name": "paths",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        ]
+      },
+      {
+        "name": "repairFilterTargets",
+        "type": "function",
+        "async": true,
+        "description": "Re-point Move/Copy filter actions whose target folder URI is invalid",
+        "parameters": [
+          {
+            "name": "accountId",
+            "type": "string"
+          }
+        ]
       }
     ]
   }

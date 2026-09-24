@@ -50,6 +50,7 @@
 
   const logConsole = document.getElementById('logConsole');
   const clearLogBtn = document.getElementById('clearLogBtn');
+  const repairFiltersBtn = document.getElementById('repairFiltersBtn');
 
   // Logger helper
   function log(msg, type = 'info') {
@@ -188,6 +189,7 @@
     }
     exportJsonBtn.addEventListener('click', handleExportJson);
     clearLogBtn.addEventListener('click', clearLog);
+    if (repairFiltersBtn) repairFiltersBtn.addEventListener('click', handleRepairFilters);
   }
 
   // Handle uploaded file
@@ -411,7 +413,49 @@
       }
     }
 
+    // Resolve the REAL Thunderbird folder URIs (imap://user%40host@server/INBOX/...)
+    // via the Experiment API. URIs guessed from WebExtension data are wrong and make
+    // Thunderbird report "folder not found" when the filter runs.
+    if (typeof messenger !== 'undefined' && messenger.rwzFilters && messenger.rwzFilters.resolveFolderUris) {
+      const keys = Array.from(folderMap.keys());
+      const paths = keys.map(k => {
+        const info = folderMap.get(k);
+        return (info && info.folder && info.folder.path) || k;
+      });
+      const resolved = await messenger.rwzFilters.resolveFolderUris(selectedAccount.id, paths);
+      keys.forEach((k, i) => {
+        const info = folderMap.get(k) || {};
+        const real = resolved ? resolved[paths[i]] : null;
+        if (real) {
+          info.uri = real;
+          info.resolved = true;
+        } else {
+          info.resolved = false;
+          log(`[警告] 無法取得資料夾「${k}」的實際 URI（路徑 ${paths[i]}）`, 'warn');
+        }
+        folderMap.set(k, info);
+      });
+    }
+
     return folderMap;
+  }
+
+  // Repair existing filters whose Move/Copy target URI is invalid
+  async function handleRepairFilters() {
+    if (!selectedAccount) return;
+    if (typeof messenger === 'undefined' || !messenger.rwzFilters || !messenger.rwzFilters.repairFilterTargets) {
+      log('此環境不支援修復功能（需在 Thunderbird 內執行）。', 'warn');
+      return;
+    }
+    log(`開始檢查帳號「${selectedAccount.name}」的篩選器目標資料夾...`);
+    const r = await messenger.rwzFilters.repairFilterTargets(selectedAccount.id);
+    if (!r.success) {
+      log(`修復失敗: ${r.error}`, 'error');
+      return;
+    }
+    r.fixed.forEach(f => log(`[已修復] ${f.filter}: ${f.from} → ${f.to}`, 'success'));
+    r.unresolved.forEach(f => log(`[無法修復] ${f.filter}: ${f.uri}（找不到對應資料夾，請手動指定）`, 'warn'));
+    log(`完成：修復 ${r.fixed.length} 個、無法修復 ${r.unresolved.length} 個。已直接寫回，不需重新啟動。`, 'success');
   }
 
   // Handle Direct Import
@@ -424,6 +468,10 @@
     try {
       // 1. Ensure required folders exist
       const resolvedFolders = await prepareFolders();
+      const unresolved = Array.from(resolvedFolders.entries()).filter(([, v]) => !v || v.resolved === false || !v.uri);
+      if (unresolved.length > 0) {
+        throw new Error(`以下資料夾找不到實際位置，已中止匯入以免產生無效篩選器：${unresolved.map(([k]) => k).join('、')}`);
+      }
 
       // 2. Generate msgFilterRules.dat content
       const { FilterGenerator } = resolveDeps();
@@ -441,6 +489,7 @@
           throw new Error(result.error || '核心寫入失敗');
         }
         log(`🎉 匯入成功！共寫入 ${result.totalImported} 條篩選器！`, 'success');
+        if (result.replacedCount) log(`已取代 ${result.replacedCount} 條同名的舊篩選器（原檔已備份為 .rwz-backup-*）`, 'info');
         if (result.targetPath) {
           log(`檔案已寫入: ${result.targetPath}`, 'info');
         }

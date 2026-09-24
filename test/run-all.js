@@ -8,7 +8,8 @@ const path = require('path');
 const tests = [
   'rwz-parser.test.js',
   'folder-manager.test.js',
-  'filter-generator.test.js'
+  'filter-generator.test.js',
+  'real-uri.test.js'
 ];
 
 let failed = false;

@@ -110,12 +110,172 @@ function forceFilterReload(account, rootFolder) {
   return result;
 }
 
+
+/**
+ * Helper: list every descendant nsIMsgFolder of an account root, with
+ * the WebExtension-style path ("/INBOX/Sub") and the display-name chain.
+ */
+function listDescendants(rootFolder) {
+  const out = [];
+  if (!rootFolder) return out;
+  const rootUri = rootFolder.URI;
+  let desc = [];
+  try {
+    desc = rootFolder.descendants;
+    if (desc && !Array.isArray(desc) && typeof desc.enumerate === 'function') {
+      // very old TB returned nsIArray
+      const arr = [];
+      const e = desc.enumerate();
+      while (e.hasMoreElements()) arr.push(e.getNext());
+      desc = arr;
+    }
+  } catch (_) {
+    desc = [];
+  }
+  for (const f of desc || []) {
+    let uriPath = '';
+    try {
+      uriPath = f.URI.startsWith(rootUri)
+        ? f.URI.substring(rootUri.length).split('/').map(s => {
+            try { return decodeURIComponent(s); } catch (_) { return s; }
+          }).join('/')
+        : '';
+    } catch (_) {}
+    if (uriPath && !uriPath.startsWith('/')) uriPath = '/' + uriPath;
+    const names = [];
+    let cur = f;
+    while (cur && cur !== rootFolder && !cur.isServer) {
+      names.unshift(cur.prettyName || cur.name);
+      cur = cur.parent;
+    }
+    out.push({ folder: f, uri: f.URI, uriPath, namePath: '/' + names.join('/'), leaf: (f.prettyName || f.name) });
+  }
+  return out;
+}
+
+/**
+ * Helper: resolve one WebExtension folder path (e.g. "/INBOX/客戶") or a
+ * display-name path (e.g. "收件匣/客戶") to the real folder URI.
+ */
+function resolvePathToUri(entries, wanted) {
+  const w = '/' + String(wanted || '').replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
+  const lw = w.toLowerCase();
+  let hit = entries.find(e => e.uriPath === w) ||
+            entries.find(e => e.uriPath.toLowerCase() === lw) ||
+            entries.find(e => e.namePath.toLowerCase() === lw);
+  if (hit) return hit.uri;
+  // unique leaf-name match as last resort
+  const leaf = lw.split('/').pop();
+  const leafHits = entries.filter(e => String(e.leaf).toLowerCase() === leaf);
+  if (leafHits.length === 1) return leafHits[0].uri;
+  return null;
+}
+
+function folderExists(uri) {
+  try {
+    let MailUtils;
+    try {
+      MailUtils = ChromeUtils.importESModule
+        ? ChromeUtils.importESModule('resource:///modules/MailUtils.sys.mjs').MailUtils
+        : ChromeUtils.import('resource:///modules/MailUtils.jsm').MailUtils;
+    } catch (_) {}
+    if (MailUtils && MailUtils.getExistingFolder) {
+      return Boolean(MailUtils.getExistingFolder(uri));
+    }
+  } catch (_) {}
+  return null; // unknown
+}
+
+/**
+ * Helper: replace filter blocks in an existing msgFilterRules.dat that have the
+ * same name as blocks in the new content (so re-importing doesn't duplicate).
+ */
+function splitDatBlocks(text) {
+  const header = [];
+  const blocks = [];
+  let cur = null;
+  for (const line of String(text || '').split(/\r?\n/)) {
+    if (line.startsWith('name=')) {
+      cur = { name: line, lines: [line] };
+      blocks.push(cur);
+    } else if (cur) {
+      if (line.trim()) cur.lines.push(line);
+    } else if (line.trim()) {
+      header.push(line);
+    }
+  }
+  return { header, blocks };
+}
+
 var rwzFilters = class extends (ExtensionCommonModule?.ExtensionCommon?.ExtensionAPI || class {}) {
   getAPI(context) {
     return {
       rwzFilters: {
         async isAvailable() {
-          return Boolean(MailServices && MailServices.accounts && MailServices.filters);
+          return Boolean(MailServices && MailServices.accounts);
+        },
+
+
+        /**
+         * Resolve folder paths (WebExtension MailFolder.path, e.g. "/INBOX/Sub")
+         * to their real Thunderbird folder URIs.
+         * Returns an object { [path]: uri|null }.
+         */
+        async resolveFolderUris(accountId, paths) {
+          const out = {};
+          const account = resolveAccount(accountId);
+          const root = account && account.incomingServer ? account.incomingServer.rootFolder : null;
+          const entries = listDescendants(root);
+          for (const p of paths || []) {
+            out[p] = resolvePathToUri(entries, p);
+          }
+          return out;
+        },
+
+        /**
+         * Scan the account's filters for Move/Copy actions pointing at folders that
+         * don't exist, and re-point them at the matching real folder.
+         * Uses the in-memory filter list + saveToDefaultFile(), so no restart needed.
+         */
+        async repairFilterTargets(accountId) {
+          try {
+            const account = resolveAccount(accountId);
+            if (!account || !account.incomingServer) {
+              return { success: false, error: `找不到帳號: ${accountId}` };
+            }
+            const server = account.incomingServer;
+            const root = server.rootFolder;
+            const entries = listDescendants(root);
+            const FA = (typeof Ci !== 'undefined' ? Ci : Components.interfaces).nsMsgFilterAction || { MoveToFolder: 1, CopyToFolder: 16 };
+            const fl = server.getFilterList(null);
+            const fixed = [];
+            const unresolved = [];
+            for (let i = 0; i < fl.filterCount; i++) {
+              const filter = fl.getFilterAt(i);
+              const actions = filter.sortedActionList || [];
+              for (const a of actions) {
+                if (a.type !== FA.MoveToFolder && a.type !== FA.CopyToFolder) continue;
+                const uri = a.targetFolderUri;
+                if (!uri) continue;
+                if (folderExists(uri) === true) continue;
+                // Take the part after scheme://host/ and decode it (this also turns %2F back into "/")
+                const m = uri.match(/^[a-z-]+:\/\/[^/]*\/(.*)$/i);
+                let tail = m ? m[1] : uri;
+                try { tail = decodeURIComponent(tail); } catch (_) {}
+                const realUri = resolvePathToUri(entries, tail);
+                if (realUri) {
+                  a.targetFolderUri = realUri;
+                  fixed.push({ filter: filter.filterName, from: uri, to: realUri });
+                } else {
+                  unresolved.push({ filter: filter.filterName, uri });
+                }
+              }
+            }
+            if (fixed.length) fl.saveToDefaultFile();
+            return { success: true, fixed, unresolved };
+          } catch (err) {
+            return { success: false, error: err.message, stack: err.stack };
+          }
         },
 
         async getAccountRootFolderUri(accountId) {
@@ -190,13 +350,22 @@ var rwzFilters = class extends (ExtensionCommonModule?.ExtensionCommon?.Extensio
 
             // 5. Merge rules: append new rules while avoiding duplicate header
             let finalDat = datContent;
+            let replacedCount = 0;
             if (existingText && existingText.trim()) {
-              const cleanNew = datContent
-                .split('\n')
-                .filter(l => !l.startsWith('version=') && !l.startsWith('logging='))
-                .join('\n')
-                .trim();
-              finalDat = existingText.trimEnd() + '\n\n' + cleanNew + '\n';
+              const oldParsed = splitDatBlocks(existingText);
+              const newParsed = splitDatBlocks(datContent);
+              const newNames = new Set(newParsed.blocks.map(b => b.name));
+              const kept = oldParsed.blocks.filter(b => !newNames.has(b.name));
+              replacedCount = oldParsed.blocks.length - kept.length;
+              const header = oldParsed.header.length ? oldParsed.header : newParsed.header;
+              finalDat = header.join('\n') + '\n' +
+                kept.concat(newParsed.blocks).map(b => b.lines.join('\n')).join('\n') + '\n';
+            }
+            // Backup the original file once per import
+            if (existingText && typeof IOUtils !== 'undefined') {
+              try {
+                await IOUtils.writeUTF8(targetPath + '.rwz-backup-' + Date.now(), existingText);
+              } catch (_) {}
             }
 
             // 6. Write to target file using IOUtils
@@ -226,6 +395,7 @@ var rwzFilters = class extends (ExtensionCommonModule?.ExtensionCommon?.Extensio
             return {
               success: true,
               totalImported,
+              replacedCount,
               targetPath,
               accountName: account.incomingServer.prettyName || account.key,
               reloadStatus: postReload.reloaded ? postReload.method : (preReload.reloaded ? `pre:${preReload.method}` : 'none'),
