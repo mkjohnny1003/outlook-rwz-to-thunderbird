@@ -71,6 +71,21 @@
 4. **執行套用**：
    - 點擊 **「⚡ 直接匯入至 Thunderbird (免重啟)」**：系統會先自動建立缺少的資料夾，並將篩選規則直接寫入 Thunderbird 核心。
    - 或點擊 **「💾 下載 msgFilterRules.dat 檔案」**：供手動備份或離線設定。
+5. **修復舊版匯入的篩選器（v1.1.0 以前的使用者請務必執行）**：
+   - 選擇帳號後點擊 **「🔧 修復篩選器目標資料夾」**。
+   - 系統會找出指向不存在資料夾的「移動 / 複製」篩選器，並自動改指向正確的資料夾，完成後直接生效，不需重新啟動。
+   - 日誌中標示「無法修復」的項目，請至「工具 → 郵件篩選器」手動指定目標資料夾。
+
+---
+
+## 📝 更新紀錄
+
+### v1.2.0
+- **修正：篩選器指向不存在的資料夾，收信時出現「找不到資料夾」。** 舊版自行拼湊資料夾 URI（帳號主機錯誤、路徑斜線被編碼成 `%2F`），現改為直接向 Thunderbird 取得資料夾的真實 URI；若有資料夾無法解析，將中止匯入而非寫入無效篩選器。
+- **修正：自動建立的資料夾被建在「收件匣」底下。** 現在會建立在帳號最上層（與收件匣同層）；舊版已建在收件匣下的資料夾會依名稱沿用，不會重複建立。
+- **新增：「🔧 修復篩選器目標資料夾」**，一鍵修正舊版匯入的錯誤篩選器。
+- **改善：重複匯入不再產生重複篩選器**，同名規則會被取代，並先將原本的 `msgFilterRules.dat` 備份為 `.rwz-backup-<時間戳>`。
+- 新增真實 Thunderbird 資料夾結構的回歸測試。
 
 ---
 
@@ -174,6 +189,21 @@ An open-source **Mozilla Thunderbird** extension (MailExtension) designed to par
 4. **Apply / Export**:
    - Click **"⚡ Direct Import to Thunderbird"** to create missing folders and inject filters directly into Thunderbird with immediate effect.
    - Or click **"💾 Download msgFilterRules.dat"** to save the filter configuration file.
+5. **Repair filters imported by older versions (required if you used v1.1.0 or earlier)**:
+   - Select the account and click **"🔧 Repair filter target folders"**.
+   - Move/Copy filters pointing at non-existent folders are re-pointed at the correct folder and saved immediately — no restart needed.
+   - Anything reported as "unresolved" must be fixed manually in Tools → Message Filters.
+
+---
+
+## 📝 Changelog
+
+### v1.2.0
+- **Fixed: filters targeted non-existent folders ("folder not found" on incoming mail).** Older versions hand-built folder URIs (wrong server host, `/` encoded as `%2F`). The real URI is now obtained from Thunderbird itself; import aborts if any folder cannot be resolved instead of writing broken filters.
+- **Fixed: auto-created folders were placed under Inbox.** They are now created at the account root; folders already created under Inbox by older versions are reused by name.
+- **Added: "🔧 Repair filter target folders"** to fix filters imported by older versions.
+- **Improved: re-importing no longer duplicates filters** — same-name rules are replaced, and the original `msgFilterRules.dat` is backed up as `.rwz-backup-<timestamp>` first.
+- Added regression tests using the real Thunderbird folder structure.
 
 ---
 
